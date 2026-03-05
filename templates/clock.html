@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>勤怠管理 - 打刻</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="header">
+        <h1>勤怠管理</h1>
+        <div class="user-info">
+            <span>{{ session.user_name }}</span>
+            <a href="{{ url_for('logout') }}" class="btn-logout">ログアウト</a>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-messages">
+        {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <div class="clock-container">
+        <div class="current-time" id="currentTime">--:--:--</div>
+        <div class="current-date" id="currentDate">----/--/--</div>
+
+        {% if today.status == 'not_clocked_in' %}
+        <div class="status-badge not-clocked">未出勤 / Not Clocked In</div>
+        {% elif today.status == 'clocked_in' %}
+        <div class="status-badge clocked-in">出勤中 / Working</div>
+        {% else %}
+        <div class="status-badge clocked-out">退勤済 / Done</div>
+        {% endif %}
+
+        <!-- 本日の打刻記録 -->
+        <div class="today-record">
+            <div class="record-item">
+                <span class="record-label">出勤 / In</span>
+                <span class="record-value {% if today.clock_in %}recorded{% endif %}">
+                    {{ today.clock_in or '--:--:--' }}
+                </span>
+            </div>
+            <div class="record-item">
+                <span class="record-label">退勤 / Out</span>
+                <span class="record-value {% if today.clock_out %}recorded{% endif %}">
+                    {{ today.clock_out or '--:--:--' }}
+                </span>
+            </div>
+        </div>
+
+        <div class="clock-buttons">
+            <form method="POST" onsubmit="return confirmClock('clock_in')">
+                <input type="hidden" name="action" value="clock_in">
+                <button type="submit" class="btn-clock btn-clock-in">
+                    出勤 / Clock In
+                </button>
+            </form>
+
+            <form method="POST" onsubmit="return confirmClock('clock_out')">
+                <input type="hidden" name="action" value="clock_out">
+                <button type="submit" class="btn-clock btn-clock-out">
+                    退勤 / Clock Out
+                </button>
+            </form>
+        </div>
+
+        <div class="workplace-info">
+            <div class="label">勤務先 / Workplace</div>
+            <div class="value">{{ session.workplace or '-' }}</div>
+        </div>
+    </div>
+
+    <script>
+        function updateClock() {
+            const now = new Date();
+            const time = now.toLocaleTimeString('ja-JP', { hour12: false });
+            const date = now.toLocaleDateString('ja-JP', {
+                year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short'
+            });
+            document.getElementById('currentTime').textContent = time;
+            document.getElementById('currentDate').textContent = date;
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        const clockedIn = {{ 'true' if today.clock_in else 'false' }};
+        const clockedOut = {{ 'true' if today.clock_out else 'false' }};
+
+        function confirmClock(action) {
+            if (action === 'clock_in' && clockedIn) {
+                return confirm('既に出勤済みです。出勤時刻を上書きしますか？\nOverwrite clock-in time?');
+            }
+            if (action === 'clock_out' && clockedOut) {
+                return confirm('既に退勤済みです。退勤時刻を上書きしますか？\nOverwrite clock-out time?');
+            }
+            return true;
+        }
+    </script>
+</body>
+</html>

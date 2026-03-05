@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>勤怠管理 - 管理画面</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="header">
+        <h1>管理画面</h1>
+        <div class="user-info">
+            <span>{{ session.user_name }}</span>
+            <a href="{{ url_for('logout') }}" class="btn-logout">ログアウト</a>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-messages" style="max-width: 1100px;">
+        {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <div class="admin-container">
+
+        <!-- 本日の出勤状況 -->
+        <div class="admin-section">
+            <h2>本日の出勤状況</h2>
+            {% if today_overview %}
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>名前</th>
+                            <th>勤務先</th>
+                            <th>状態</th>
+                            <th>出勤</th>
+                            <th>退勤</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for e in today_overview %}
+                        <tr>
+                            <td>{{ e.name }}</td>
+                            <td>{{ e.workplace or '-' }}</td>
+                            <td>
+                                {% if e.clock_out %}
+                                <span class="status-badge clocked-out" style="font-size:12px; padding:4px 12px; margin:0;">退勤済</span>
+                                {% elif e.clock_in %}
+                                <span class="status-badge clocked-in" style="font-size:12px; padding:4px 12px; margin:0;">出勤中</span>
+                                {% else %}
+                                <span class="status-badge not-clocked" style="font-size:12px; padding:4px 12px; margin:0;">未出勤</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ e.clock_in or '-' }}</td>
+                            <td>{{ e.clock_out or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p style="color: #888;">従業員が登録されていません</p>
+            {% endif %}
+        </div>
+
+        <!-- 従業員登録 -->
+        <div class="admin-section">
+            <h2>従業員登録</h2>
+            <form method="POST" action="{{ url_for('add_employee') }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>名前</label>
+                        <input type="text" name="name" placeholder="例: Nguyen Van A" required>
+                    </div>
+                    <div class="form-group">
+                        <label>勤務先</label>
+                        <input type="text" name="workplace" placeholder="例: 東京工場">
+                    </div>
+                    <button type="submit" class="btn-primary">登録</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 従業員一覧 -->
+        <div class="admin-section">
+            <h2>従業員一覧 ({{ employees|length }}名)</h2>
+            {% if employees %}
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>名前</th>
+                            <th>ID</th>
+                            <th>勤務先</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for emp in employees %}
+                        <tr>
+                            <td>{{ emp.name }}</td>
+                            <td>{{ emp.login_id }}</td>
+                            <td>{{ emp.workplace or '-' }}</td>
+                            <td style="white-space: nowrap;">
+                                <!-- 編集 -->
+                                <button class="btn-edit" data-id="{{ emp.id }}" data-name="{{ emp.name }}" data-workplace="{{ emp.workplace }}" onclick="openEditModal(this)">編集</button>
+                                <!-- PWリセット -->
+                                <form method="POST" action="{{ url_for('reset_password', user_id=emp.id) }}" style="display:inline;"
+                                      onsubmit="return confirm('{{ emp.name }} のパスワードをリセットしますか？');">
+                                    <button type="submit" class="btn-warning">PW再発行</button>
+                                </form>
+                                <!-- 削除 -->
+                                <form method="POST" action="{{ url_for('delete_employee', user_id=emp.id) }}" style="display:inline;"
+                                      onsubmit="return confirm('{{ emp.name }} を削除しますか？勤怠データも全て消えます。');">
+                                    <button type="submit" class="btn-danger">削除</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p style="color: #888;">従業員が登録されていません</p>
+            {% endif %}
+        </div>
+
+        <!-- 勤怠データ -->
+        <div class="admin-section">
+            <h2>勤怠データ</h2>
+
+            <form method="GET" action="{{ url_for('admin_dashboard') }}">
+                <div class="filter-row">
+                    <div class="form-group">
+                        <label>年月</label>
+                        <input type="month" name="year_month" value="{{ year_month }}">
+                    </div>
+                    <div class="form-group">
+                        <label>従業員</label>
+                        <select name="employee_id">
+                            <option value="">全員</option>
+                            {% for emp in employees %}
+                            <option value="{{ emp.id }}"
+                                    {% if employee_filter == emp.id|string %}selected{% endif %}>
+                                {{ emp.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>勤務先</label>
+                        <select name="workplace">
+                            <option value="">全勤務先</option>
+                            {% for wp in workplaces %}
+                            <option value="{{ wp }}"
+                                    {% if workplace_filter == wp %}selected{% endif %}>
+                                {{ wp }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn-primary">表示</button>
+                </div>
+            </form>
+
+            <!-- ダウンロードボタン -->
+            <div style="margin-bottom: 16px; display: flex; gap: 8px;">
+                <a href="{{ url_for('download', format='csv', year_month=year_month, employee_id=employee_filter, workplace=workplace_filter) }}"
+                   class="btn-download">CSV ダウンロード</a>
+                <a href="{{ url_for('download', format='excel', year_month=year_month, employee_id=employee_filter, workplace=workplace_filter) }}"
+                   class="btn-download" style="background: #1565c0;">Excel ダウンロード</a>
+            </div>
+
+            {% if records %}
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>日付</th>
+                            <th>名前</th>
+                            <th>勤務先</th>
+                            <th>出勤</th>
+                            <th>退勤</th>
+                            <th>休憩時間</th>
+                            <th>労働時間</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in records %}
+                        <tr>
+                            <td>{{ r.date }}</td>
+                            <td>{{ r.name }}</td>
+                            <td>{{ r.workplace }}</td>
+                            <td>{{ r.clock_in or '-' }}</td>
+                            <td>{{ r.clock_out or '-' }}</td>
+                            <td>{{ r.break_time }}</td>
+                            <td>{{ r.work_hours }}</td>
+                            <td>
+                                <button class="btn-edit" data-user-id="{{ r.user_id }}" data-date="{{ r.date }}" data-clock-in="{{ r.clock_in or '' }}" data-clock-out="{{ r.clock_out or '' }}" onclick="openAttendanceEdit(this)">修正</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p style="color: #888;">該当するデータがありません</p>
+            {% endif %}
+
+            <!-- 勤怠データ手動追加 -->
+            <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #e0e0e0;">
+                <h3 style="font-size: 14px; color: #666; margin-bottom: 12px;">勤怠データの手動追加・修正</h3>
+                <form method="POST" action="{{ url_for('edit_attendance') }}">
+                    <div class="filter-row">
+                        <div class="form-group">
+                            <label>従業員</label>
+                            <select name="user_id" id="manualUserId" required>
+                                {% for emp in employees %}
+                                <option value="{{ emp.id }}">{{ emp.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>日付</label>
+                            <input type="date" name="date" id="manualDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label>出勤時刻</label>
+                            <input type="time" name="clock_in" id="manualClockIn" step="1">
+                        </div>
+                        <div class="form-group">
+                            <label>退勤時刻</label>
+                            <input type="time" name="clock_out" id="manualClockOut" step="1">
+                        </div>
+                        <button type="submit" class="btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 従業員編集モーダル -->
+    <div id="editModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <h3>従業員情報の編集</h3>
+            <form method="POST" id="editForm">
+                <div class="form-group">
+                    <label>名前</label>
+                    <input type="text" name="name" id="editName" required>
+                </div>
+                <div class="form-group">
+                    <label>勤務先</label>
+                    <input type="text" name="workplace" id="editWorkplace">
+                </div>
+                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button type="button" class="btn-cancel" onclick="closeModal('editModal')">キャンセル</button>
+                    <button type="submit" class="btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openEditModal(btn) {
+            document.getElementById('editForm').action = '/admin/edit_employee/' + btn.dataset.id;
+            document.getElementById('editName').value = btn.dataset.name;
+            document.getElementById('editWorkplace').value = btn.dataset.workplace;
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function openAttendanceEdit(btn) {
+            var userId = btn.dataset.userId;
+            var select = document.getElementById('manualUserId');
+            for (var i = 0; i < select.options.length; i++) {
+                if (select.options[i].value === userId) {
+                    select.options[i].selected = true;
+                    break;
+                }
+            }
+            document.getElementById('manualDate').value = btn.dataset.date;
+            document.getElementById('manualClockIn').value = btn.dataset.clockIn;
+            document.getElementById('manualClockOut').value = btn.dataset.clockOut;
+            document.getElementById('manualDate').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        document.getElementById('editModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal('editModal');
+        });
+    </script>
+</body>
+</html>
