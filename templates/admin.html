@@ -111,12 +111,12 @@
                                 <button class="btn-edit" data-id="{{ emp.id }}" data-name="{{ emp.name }}" data-workplace="{{ emp.workplace }}" onclick="openEditModal(this)">編集</button>
                                 <!-- PWリセット -->
                                 <form method="POST" action="{{ url_for('reset_password', user_id=emp.id) }}" style="display:inline;"
-                                      onsubmit="return confirm('{{ emp.name }} のパスワードをリセットしますか？');">
+                                      data-name="{{ emp.name }}" onsubmit="return confirmAction(this, 'pw');">
                                     <button type="submit" class="btn-warning">PW再発行</button>
                                 </form>
                                 <!-- 削除 -->
                                 <form method="POST" action="{{ url_for('delete_employee', user_id=emp.id) }}" style="display:inline;"
-                                      onsubmit="return confirm('{{ emp.name }} を削除しますか？勤怠データも全て消えます。');">
+                                      data-name="{{ emp.name }}" onsubmit="return confirmAction(this, 'delete');">
                                     <button type="submit" class="btn-danger">削除</button>
                                 </form>
                             </td>
@@ -268,6 +268,16 @@
     </div>
 
     <script>
+        function confirmAction(form, type) {
+            var name = form.dataset.name;
+            if (type === 'pw') {
+                return confirm(name + ' のパスワードをリセットしますか？');
+            } else if (type === 'delete') {
+                return confirm(name + ' を削除しますか？（勤怠データは保持されます）');
+            }
+            return true;
+        }
+
         function openEditModal(btn) {
             document.getElementById('editForm').action = '/admin/edit_employee/' + btn.dataset.id;
             document.getElementById('editName').value = btn.dataset.name;

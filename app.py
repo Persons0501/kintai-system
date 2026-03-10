@@ -20,6 +20,10 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if 'user_id' not in session:
             return redirect(url_for('login'))
+        if not db.is_user_active(session['user_id']):
+            session.clear()
+            flash('このアカウントは無効化されています', 'error')
+            return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated
 
@@ -173,7 +177,11 @@ def edit_employee(user_id):
 @app.route('/admin/edit_attendance', methods=['POST'])
 @admin_required
 def edit_attendance():
-    user_id = int(request.form.get('user_id'))
+    user_id_str = request.form.get('user_id', '').strip()
+    if not user_id_str or not user_id_str.isdigit():
+        flash('従業員を選択してください', 'error')
+        return redirect(url_for('admin_dashboard'))
+    user_id = int(user_id_str)
     date = request.form.get('date', '').strip()
     clock_in = request.form.get('clock_in', '').strip()
     clock_out = request.form.get('clock_out', '').strip()
@@ -258,4 +266,6 @@ if __name__ == '__main__':
     print('http://localhost:5000 でアクセスしてください')
     print('管理者ログイン → ID: admin / パスワード: admin123')
     print('========================')
-    app.run(debug=False, host='0.0.0.0', port=5000)
+
+    from waitress import serve
+    serve(app, host='0.0.0.0', port=5000, threads=8)

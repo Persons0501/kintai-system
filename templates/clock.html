@@ -5,19 +5,325 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>勤怠管理 - 打刻</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .clock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+        }
+
+        .clock-header .user-greeting {
+            color: rgba(255,255,255,0.9);
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .clock-header .user-greeting strong {
+            font-weight: 700;
+        }
+
+        .clock-header .btn-logout-light {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            font-size: 14px;
+            padding: 6px 16px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 20px;
+            transition: all 0.2s;
+        }
+
+        .clock-header .btn-logout-light:hover {
+            background: rgba(255,255,255,0.15);
+            color: white;
+        }
+
+        .clock-main {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 20px 40px;
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        /* 時計 */
+        .time-display {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .time-display .time {
+            font-size: 72px;
+            font-weight: 800;
+            color: white;
+            letter-spacing: 2px;
+            font-variant-numeric: tabular-nums;
+            text-shadow: 0 2px 20px rgba(0,0,0,0.15);
+            line-height: 1;
+        }
+
+        .time-display .date {
+            font-size: 18px;
+            color: rgba(255,255,255,0.8);
+            margin-top: 8px;
+            font-weight: 500;
+        }
+
+        /* メインカード */
+        .clock-card {
+            background: white;
+            border-radius: 24px;
+            padding: 32px 28px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+        }
+
+        /* ステータス */
+        .status-section {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .status-pill.not-clocked {
+            background: #f5f5f5;
+            color: #999;
+        }
+
+        .status-pill.clocked-in {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status-pill.clocked-out {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .status-pill .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-pill.not-clocked .status-dot { background: #ccc; }
+        .status-pill.clocked-in .status-dot { background: #4caf50; animation: pulse 1.5s infinite; }
+        .status-pill.clocked-out .status-dot { background: #1976d2; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.3); }
+        }
+
+        /* 打刻記録 */
+        .punch-records {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .punch-record-card {
+            background: #fafbfc;
+            border-radius: 14px;
+            padding: 16px;
+            text-align: center;
+            border: 2px solid #f0f0f0;
+        }
+
+        .punch-record-card.has-value {
+            border-color: transparent;
+        }
+
+        .punch-record-card.in-card.has-value {
+            background: #f0faf0;
+            border-color: #c8e6c9;
+        }
+
+        .punch-record-card.out-card.has-value {
+            background: #f0f4fa;
+            border-color: #bbdefb;
+        }
+
+        .punch-record-card .punch-label {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #aaa;
+            margin-bottom: 6px;
+        }
+
+        .punch-record-card.in-card.has-value .punch-label { color: #66bb6a; }
+        .punch-record-card.out-card.has-value .punch-label { color: #42a5f5; }
+
+        .punch-record-card .punch-time {
+            font-size: 26px;
+            font-weight: 800;
+            color: #ddd;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .punch-record-card.has-value .punch-time {
+            color: #333;
+        }
+
+        /* ボタン */
+        .action-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .btn-punch {
+            padding: 22px 16px;
+            border: none;
+            border-radius: 16px;
+            font-size: 20px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+            line-height: 1.3;
+        }
+
+        .btn-punch:active {
+            transform: scale(0.96);
+        }
+
+        .btn-punch-in {
+            background: linear-gradient(135deg, #43a047, #66bb6a);
+            color: white;
+        }
+
+        .btn-punch-in:hover {
+            box-shadow: 0 6px 20px rgba(76,175,80,0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-punch-out {
+            background: linear-gradient(135deg, #e53935, #ef5350);
+            color: white;
+        }
+
+        .btn-punch-out:hover {
+            box-shadow: 0 6px 20px rgba(244,67,54,0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-punch .btn-sub {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            opacity: 0.85;
+            margin-top: 4px;
+        }
+
+        /* 勤務先 */
+        .workplace-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .workplace-bar .wp-icon {
+            font-size: 16px;
+        }
+
+        .workplace-bar .wp-name {
+            font-weight: 700;
+            color: #444;
+        }
+
+        /* フラッシュ */
+        .clock-flash {
+            max-width: 480px;
+            margin: 0 auto 0;
+            padding: 0 20px;
+        }
+
+        .clock-flash .flash {
+            border-radius: 12px;
+            margin-bottom: 12px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .clock-flash .flash.success {
+            background: rgba(255,255,255,0.95);
+            color: #2e7d32;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .clock-flash .flash.error {
+            background: rgba(255,255,255,0.95);
+            color: #c62828;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        /* レスポンシブ */
+        @media (max-width: 480px) {
+            .time-display .time {
+                font-size: 52px;
+            }
+
+            .clock-card {
+                padding: 24px 20px;
+                border-radius: 20px;
+            }
+
+            .btn-punch {
+                padding: 18px 12px;
+                font-size: 18px;
+            }
+
+            .punch-record-card .punch-time {
+                font-size: 22px;
+            }
+
+            .clock-header {
+                padding: 12px 16px;
+            }
+        }
+    </style>
 </head>
 <body>
-    <div class="header">
-        <h1>勤怠管理</h1>
-        <div class="user-info">
-            <span>{{ session.user_name }}</span>
-            <a href="{{ url_for('logout') }}" class="btn-logout">ログアウト</a>
+    <div class="clock-header">
+        <div class="user-greeting">
+            <strong>{{ session.user_name }}</strong>
         </div>
+        <a href="{{ url_for('logout') }}" class="btn-logout-light">ログアウト / Logout</a>
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-    <div class="flash-messages">
+    <div class="clock-flash">
         {% for category, message in messages %}
         <div class="flash {{ category }}">{{ message }}</div>
         {% endfor %}
@@ -25,53 +331,69 @@
     {% endif %}
     {% endwith %}
 
-    <div class="clock-container">
-        <div class="current-time" id="currentTime">--:--:--</div>
-        <div class="current-date" id="currentDate">----/--/--</div>
-
-        {% if today.status == 'not_clocked_in' %}
-        <div class="status-badge not-clocked">未出勤 / Not Clocked In</div>
-        {% elif today.status == 'clocked_in' %}
-        <div class="status-badge clocked-in">出勤中 / Working</div>
-        {% else %}
-        <div class="status-badge clocked-out">退勤済 / Done</div>
-        {% endif %}
-
-        <!-- 本日の打刻記録 -->
-        <div class="today-record">
-            <div class="record-item">
-                <span class="record-label">出勤 / In</span>
-                <span class="record-value {% if today.clock_in %}recorded{% endif %}">
-                    {{ today.clock_in or '--:--:--' }}
-                </span>
-            </div>
-            <div class="record-item">
-                <span class="record-label">退勤 / Out</span>
-                <span class="record-value {% if today.clock_out %}recorded{% endif %}">
-                    {{ today.clock_out or '--:--:--' }}
-                </span>
-            </div>
+    <div class="clock-main">
+        <!-- 時計 -->
+        <div class="time-display">
+            <div class="time" id="currentTime">--:--:--</div>
+            <div class="date" id="currentDate">----/--/--</div>
         </div>
 
-        <div class="clock-buttons">
-            <form method="POST" onsubmit="return confirmClock('clock_in')">
-                <input type="hidden" name="action" value="clock_in">
-                <button type="submit" class="btn-clock btn-clock-in">
-                    出勤 / Clock In
-                </button>
-            </form>
+        <!-- メインカード -->
+        <div class="clock-card">
+            <!-- ステータス -->
+            <div class="status-section">
+                {% if today.status == 'not_clocked_in' %}
+                <div class="status-pill not-clocked">
+                    <span class="status-dot"></span>
+                    未出勤 / Not Clocked In
+                </div>
+                {% elif today.status == 'clocked_in' %}
+                <div class="status-pill clocked-in">
+                    <span class="status-dot"></span>
+                    出勤中 / Working
+                </div>
+                {% else %}
+                <div class="status-pill clocked-out">
+                    <span class="status-dot"></span>
+                    退勤済 / Done
+                </div>
+                {% endif %}
+            </div>
 
-            <form method="POST" onsubmit="return confirmClock('clock_out')">
-                <input type="hidden" name="action" value="clock_out">
-                <button type="submit" class="btn-clock btn-clock-out">
-                    退勤 / Clock Out
-                </button>
-            </form>
-        </div>
+            <!-- 本日の打刻記録 -->
+            <div class="punch-records">
+                <div class="punch-record-card in-card {% if today.clock_in %}has-value{% endif %}">
+                    <div class="punch-label">出勤 / In</div>
+                    <div class="punch-time">{{ today.clock_in or '--:--' }}</div>
+                </div>
+                <div class="punch-record-card out-card {% if today.clock_out %}has-value{% endif %}">
+                    <div class="punch-label">退勤 / Out</div>
+                    <div class="punch-time">{{ today.clock_out or '--:--' }}</div>
+                </div>
+            </div>
 
-        <div class="workplace-info">
-            <div class="label">勤務先 / Workplace</div>
-            <div class="value">{{ session.workplace or '-' }}</div>
+            <!-- ボタン -->
+            <div class="action-buttons">
+                <form method="POST" onsubmit="return confirmClock('clock_in')">
+                    <input type="hidden" name="action" value="clock_in">
+                    <button type="submit" class="btn-punch btn-punch-in">
+                        出勤<span class="btn-sub">Clock In</span>
+                    </button>
+                </form>
+                <form method="POST" onsubmit="return confirmClock('clock_out')">
+                    <input type="hidden" name="action" value="clock_out">
+                    <button type="submit" class="btn-punch btn-punch-out">
+                        退勤<span class="btn-sub">Clock Out</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- 勤務先 -->
+            <div class="workplace-bar">
+                <span class="wp-icon">&#128205;</span>
+                勤務先:
+                <span class="wp-name">{{ session.workplace or '-' }}</span>
+            </div>
         </div>
     </div>
 

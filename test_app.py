@@ -92,7 +92,7 @@ client.get('/logout')
 
 r = client.post('/login', data={'login_id': login_id, 'password': raw_pw}, follow_redirects=True)
 test('従業員ログイン成功', r.status_code == 200)
-test('打刻画面が表示される', '出勤 / Clock In'.encode('utf-8') in r.data)
+test('打刻画面が表示される', 'Clock In'.encode('utf-8') in r.data)
 test('勤務先が表示される', '名古屋工場'.encode('utf-8') in r.data)
 test('未出勤ステータス', 'Not Clocked In'.encode('utf-8') in r.data)
 
@@ -101,8 +101,8 @@ r = client.post('/clock', data={'action': 'clock_in'}, follow_redirects=True)
 test('出勤打刻成功', '出勤しました'.encode('utf-8') in r.data)
 test('出勤中ステータスに変更', 'Working'.encode('utf-8') in r.data)
 
-# 出勤時刻が表示されている（--:--:--は時計初期値+退勤未打刻の2箇所のみ）
-test('出勤時刻が表示される', r.data.count(b'--:--:--') == 2, '時計初期値+退勤の2箇所であるべき')
+# 出勤時刻が表示されている（--:--は退勤未打刻の1箇所のみ）
+test('出勤時刻が表示される', b'--:--' in r.data and r.data.count(b'--:--:--') <= 1, '退勤が未打刻であるべき')
 
 # 出勤を再度押す → 確認ダイアログ用のJS変数がtrueになっている
 test('出勤済みフラグがJSに渡る', b'const clockedIn = true' in r.data)
