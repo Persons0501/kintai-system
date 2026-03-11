@@ -222,7 +222,7 @@ def get_attendance_records(user_id=None, year_month=None):
         query += " AND a.date LIKE ?"
         params.append(f'{year_month}%')
 
-    query += ' ORDER BY a.date DESC, u.name'
+    query += ' ORDER BY a.date ASC, u.name'
 
     rows = conn.execute(query, params).fetchall()
     conn.close()

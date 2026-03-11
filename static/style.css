@@ -214,6 +214,7 @@ body {
 .clock-buttons {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 20px;
     width: 100%;
     max-width: 320px;

@@ -193,7 +193,12 @@
             margin-bottom: 24px;
         }
 
+        .action-buttons form {
+            width: 100%;
+        }
+
         .btn-punch {
+            width: 100%;
             padding: 22px 16px;
             border: none;
             border-radius: 16px;
@@ -334,7 +339,7 @@
     <div class="clock-main">
         <!-- 時計 -->
         <div class="time-display">
-            <div class="time" id="currentTime">--:--:--</div>
+            <div class="time" id="currentTime">--:--</div>
             <div class="date" id="currentDate">----/--/--</div>
         </div>
 
@@ -364,11 +369,11 @@
             <div class="punch-records">
                 <div class="punch-record-card in-card {% if today.clock_in %}has-value{% endif %}">
                     <div class="punch-label">出勤 / In</div>
-                    <div class="punch-time">{{ today.clock_in or '--:--' }}</div>
+                    <div class="punch-time">{{ today.clock_in[:5] if today.clock_in else '--:--' }}</div>
                 </div>
                 <div class="punch-record-card out-card {% if today.clock_out %}has-value{% endif %}">
                     <div class="punch-label">退勤 / Out</div>
-                    <div class="punch-time">{{ today.clock_out or '--:--' }}</div>
+                    <div class="punch-time">{{ today.clock_out[:5] if today.clock_out else '--:--' }}</div>
                 </div>
             </div>
 
@@ -400,7 +405,7 @@
     <script>
         function updateClock() {
             const now = new Date();
-            const time = now.toLocaleTimeString('ja-JP', { hour12: false });
+            const time = now.toLocaleTimeString('ja-JP', { hour12: false, hour: '2-digit', minute: '2-digit' });
             const date = now.toLocaleDateString('ja-JP', {
                 year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short'
             });

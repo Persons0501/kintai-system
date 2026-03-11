@@ -6,8 +6,19 @@ from functools import wraps
 from flask import (Flask, render_template, request, redirect, url_for,
                    session, flash, send_file)
 from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 import database as db
+
+
+def calc_break_time_for_excel(total_minutes):
+    """Excel合計行用の休憩時間計算"""
+    if total_minutes > 480:
+        return 60
+    elif total_minutes > 360:
+        return 45
+    return 0
+
 
 app = Flask(__name__)
 app.secret_key = 'kintai-system-secret-key-2026'
@@ -212,26 +223,138 @@ def download():
     if fmt == 'excel':
         wb = Workbook()
         ws = wb.active
-        ws.title = '勤怠データ'
-        ws.append(headers)
+        ws.title = '勤怠表'
 
-        for r in records:
-            ws.append([
+        # --- スタイル定義 ---
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        title_font = Font(name='Yu Gothic', size=14, bold=True)
+        subtitle_font = Font(name='Yu Gothic', size=10, color='666666')
+        header_font = Font(name='Yu Gothic', size=10, bold=True, color='FFFFFF')
+        header_fill = PatternFill(start_color='2B3E50', end_color='2B3E50', fill_type='solid')
+        cell_font = Font(name='Yu Gothic', size=10)
+        center_align = Alignment(horizontal='center', vertical='center')
+        left_align = Alignment(horizontal='left', vertical='center')
+        even_fill = PatternFill(start_color='F7F9FC', end_color='F7F9FC', fill_type='solid')
+        total_fill = PatternFill(start_color='E8ECF1', end_color='E8ECF1', fill_type='solid')
+        total_font = Font(name='Yu Gothic', size=10, bold=True)
+
+        # --- タイトル行 ---
+        ws.merge_cells('A1:G1')
+        title_cell = ws['A1']
+        title_cell.value = f'勤怠表  {year_month}'
+        title_cell.font = title_font
+        title_cell.alignment = Alignment(horizontal='left', vertical='center')
+        ws.row_dimensions[1].height = 32
+
+        # フィルタ情報
+        filter_parts = []
+        if workplace:
+            filter_parts.append(f'勤務先: {workplace}')
+        if user_id:
+            emp_name = next((r['name'] for r in records if r['user_id'] == user_id), '')
+            if emp_name:
+                filter_parts.append(f'従業員: {emp_name}')
+        ws.merge_cells('A2:G2')
+        sub_cell = ws['A2']
+        sub_cell.value = '  '.join(filter_parts) if filter_parts else '全従業員'
+        sub_cell.font = subtitle_font
+        ws.row_dimensions[2].height = 20
+
+        # 空行
+        ws.row_dimensions[3].height = 8
+
+        # --- ヘッダー行 ---
+        header_row = 4
+        for col_idx, h in enumerate(headers, 1):
+            cell = ws.cell(row=header_row, column=col_idx, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center_align
+            cell.border = thin_border
+        ws.row_dimensions[header_row].height = 28
+
+        # --- データ行 ---
+        total_work_minutes = 0
+        data_row_count = 0
+        for i, r in enumerate(records):
+            row_num = header_row + 1 + i
+            data_row_count += 1
+            row_data = [
                 r['date'], r['name'], r['workplace'],
-                r['clock_in'] or '', r['clock_out'] or '',
+                (r['clock_in'][:5] if r['clock_in'] else ''),
+                (r['clock_out'][:5] if r['clock_out'] else ''),
                 r['break_time'], r['work_hours']
-            ])
+            ]
+            for col_idx, val in enumerate(row_data, 1):
+                cell = ws.cell(row=row_num, column=col_idx, value=val)
+                cell.font = cell_font
+                cell.border = thin_border
+                if col_idx in (1, 4, 5, 6, 7):
+                    cell.alignment = center_align
+                else:
+                    cell.alignment = left_align
+                if i % 2 == 1:
+                    cell.fill = even_fill
 
-        # 列幅の自動調整
-        for col in ws.columns:
-            max_len = max(len(str(cell.value or '')) for cell in col)
-            ws.column_dimensions[col[0].column_letter].width = max_len + 4
+            total_work_minutes += r.get('total_raw_minutes', 0)
+
+        # --- 合計行 ---
+        if data_row_count > 0:
+            total_row = header_row + 1 + data_row_count
+            total_break = 0
+            for r in records:
+                if r.get('total_raw_minutes', 0) > 0:
+                    total_break += calc_break_time_for_excel(r['total_raw_minutes'])
+            net_minutes = total_work_minutes - total_break
+            total_h = int(net_minutes // 60)
+            total_m = int(net_minutes % 60)
+
+            ws.merge_cells(start_row=total_row, start_column=1, end_row=total_row, end_column=5)
+            total_label = ws.cell(row=total_row, column=1, value='合計')
+            total_label.font = total_font
+            total_label.fill = total_fill
+            total_label.alignment = center_align
+            total_label.border = thin_border
+            for c in range(2, 6):
+                cell = ws.cell(row=total_row, column=c)
+                cell.fill = total_fill
+                cell.border = thin_border
+
+            break_cell = ws.cell(row=total_row, column=6, value=f'{int(total_break)}分')
+            break_cell.font = total_font
+            break_cell.fill = total_fill
+            break_cell.alignment = center_align
+            break_cell.border = thin_border
+
+            work_cell = ws.cell(row=total_row, column=7, value=f'{total_h}時間{total_m}分')
+            work_cell.font = total_font
+            work_cell.fill = total_fill
+            work_cell.alignment = center_align
+            work_cell.border = thin_border
+
+            ws.row_dimensions[total_row].height = 28
+
+        # --- 列幅 ---
+        col_widths = {'A': 14, 'B': 18, 'C': 16, 'D': 10, 'E': 10, 'F': 12, 'G': 16}
+        for col_letter, width in col_widths.items():
+            ws.column_dimensions[col_letter].width = width
+
+        # --- 印刷設定 ---
+        ws.sheet_properties.pageSetUpPr = None
+        ws.page_setup.orientation = 'landscape'
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
 
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
 
-        filename = f'kintai_{year_month}.xlsx'
+        filename = f'勤怠表_{year_month}.xlsx'
         return send_file(output, as_attachment=True, download_name=filename,
                          mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
@@ -246,7 +369,8 @@ def download():
         for r in records:
             writer.writerow([
                 r['date'], r['name'], r['workplace'],
-                r['clock_in'] or '', r['clock_out'] or '',
+                (r['clock_in'][:5] if r['clock_in'] else ''),
+                (r['clock_out'][:5] if r['clock_out'] else ''),
                 r['break_time'], r['work_hours']
             ])
 
